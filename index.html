@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Mercado</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            color: #f0f0f0;
+            background-color: #121212;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+        }
+        h1 {
+            font-size: 1.8em;
+            margin-bottom: 15px;
+            color: #00e676;
+            text-align: center;
+        }
+        label, button {
+            font-size: 14px;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #1e1e1e;
+            color: #f0f0f0;
+            border: 1px solid #333;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 280px;
+            text-align: center;
+            outline: none;
+        }
+        select {
+            font-size: 13px;
+            padding: 5px;
+            margin: 5px 0;
+            background-color: #1e1e1e;
+            color: #f0f0f0;
+            border: 1px solid #333;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 280px;
+            text-align: center;
+            outline: none;
+        }
+        button {
+            background-color: #028043;
+            cursor: pointer;
+            transition: 0.2s;
+            
+        }
+        button:hover {
+            background-color: #00c853;
+        }
+        p {
+            font-size: 0.9em;
+            background-color: #1e1e1e;
+            padding: 10px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 280px;
+            text-align: center;
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+        h2 {
+            font-size: 1em;
+            margin: 8px 0 5px;
+            color: #80d8ff;
+            text-align: center;
+        }
+
+        #countdown {
+            font-size: 0.9em;
+            color: #ffab40;
+            margin: 10px 0;
+        }
+        .dos {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* 4 columnas iguales */
+            gap: 8px; /* Espacio entre las señales */
+            text-align: center;
+            font-size: 14px;
+            border: 1px solid #828181;
+            border-radius: 5px;
+            background-color: #2a2a2a;
+            width: 100%;
+            max-width: 280px; 
+        }
+    </style>
+
+    <script>
+        let analysisInterval; // Intervalo de análisis
+        let countdownInterval; // Intervalo para el temporizador de cuenta regresiva
+        const analysisDelay = 31; // Tiempo de espera en segundos para el próximo análisis
+
+        async function fetchBinancePrices(symbol = 'BTCUSDT', interval = '15m', limit = 96) {
+            const baseUrl = 'https://api.binance.com/api/v3/klines';
+            const params = `?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+            const url = baseUrl + params;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                return data.map(candle => parseFloat(candle[4])); // Precio de cierre
+            } catch (error) {
+                console.error('Error al obtener datos de Binance:', error);
+                return [];
+            }
+        }
+
+        // Función para calcular Bandas de Bollinger
+        function calculateBollingerBands(prices, period = 20, stdDevMultiplier = 2) {
+            let sma = calculateSMA(prices, period);
+            let stdDev = calculateStandardDeviation(prices, sma, period);
+            let upperBand = sma.map((value, index) => value + (stdDev[index] * stdDevMultiplier));
+            let lowerBand = sma.map((value, index) => value - (stdDev[index] * stdDevMultiplier));
+            return { sma, upperBand, lowerBand };
+        }
+
+        // Función para calcular SMA
+        function calculateSMA(prices, period) {
+            let sma = [];
+            for (let i = 0; i < prices.length; i++) {
+                if (i >= period - 1) {
+                    let sum = 0;
+                    for (let j = 0; j < period; j++) {
+                        sum += prices[i - j];
+                    }
+                    sma.push(sum / period);
+                } else {
+                    sma.push(null);
+                }
+            }
+            return sma;
+        }
+
+        // Función para calcular Desviación Estándar
+        function calculateStandardDeviation(prices, sma, period) {
+            let stdDev = [];
+            for (let i = period - 1; i < prices.length; i++) {
+                let variance = 0;
+                for (let j = 0; j < period; j++) {
+                    variance += Math.pow(prices[i - j] - sma[i - period + 1], 2);
+                }
+                stdDev.push(Math.sqrt(variance / period));
+            }
+            return stdDev;
+        }
+
+        // Función para calcular el CCI (Commodity Channel Index)
+        function calculateCCI(prices, period = 14) {
+            let cci = [];
+            for (let i = 0; i < prices.length; i++) {
+                if (i >= period - 1) {
+                    let typicalPrice = 0;
+                    let sma = 0;
+                    for (let j = 0; j < period; j++) {
+                        typicalPrice += prices[i - j];
+                    }
+                    sma = typicalPrice / period;
+                    let meanDeviation = 0;
+                    for (let j = 0; j < period; j++) {
+                        meanDeviation += Math.abs(prices[i - j] - sma);
+                    }
+                    cci.push((prices[i] - sma) / (meanDeviation / period) * 0.015);
+                } else {
+                    cci.push(null);
+                }
+            }
+            return cci;
+        }
+
+        // Función para calcular el Estocástico
+        function calculateStochastic(prices, period = 14) {
+            let stoch = [];
+            for (let i = 0; i < prices.length; i++) {
+                if (i >= period - 1) {
+                    let highestHigh = Math.max(...prices.slice(i - period + 1, i + 1));
+                    let lowestLow = Math.min(...prices.slice(i - period + 1, i + 1));
+                    let currentPrice = prices[i];
+                    let stochValue = (currentPrice - lowestLow) / (highestHigh - lowestLow) * 100;
+                    stoch.push(stochValue);
+                } else {
+                    stoch.push(null);
+                }
+            }
+            return stoch;
+        }
+
+        // Función para calcular ADX
+        function calculateADX(prices, period = 14) {
+            let adx = [];
+            let plusDI = [];
+            let minusDI = [];
+            // Cálculo de plusDI y minusDI (dirección positiva y negativa del movimiento)
+            for (let i = 1; i < prices.length; i++) {
+                let upMove = prices[i] - prices[i - 1];
+                let downMove = prices[i - 1] - prices[i];
+                plusDI.push(upMove > downMove ? upMove : 0);
+                minusDI.push(downMove > upMove ? downMove : 0);
+            }
+            // Cálculo del ADX
+            for (let i = period; i < prices.length; i++) {
+                let avgPlusDI = plusDI.slice(i - period, i).reduce((acc, val) => acc + val, 0) / period;
+                let avgMinusDI = minusDI.slice(i - period, i).reduce((acc, val) => acc + val, 0) / period;
+                let adxValue = Math.abs(avgPlusDI - avgMinusDI) / (avgPlusDI + avgMinusDI) * 100;
+                adx.push(adxValue);
+            }
+            return adx;
+        }
+
+        // Función para calcular CHOCH (Change of Character)
+        function calculateCHOCH(prices, period = 14) {
+            let choch = [];
+            for (let i = period; i < prices.length; i++) {
+                let prevHigh = Math.max(...prices.slice(i - period, i));
+                let prevLow = Math.min(...prices.slice(i - period, i));
+                let currentPrice = prices[i];
+                if (currentPrice > prevHigh) {
+                    choch.push('Alcista');
+                } else if (currentPrice < prevLow) {
+                    choch.push('Bajista');
+                } else {
+                    choch.push('Neutral');
+                }
+            }
+            return choch;
+        }
+
+        // Función para determinar si el mercado es lateral
+        function isMarketLateral(prices) {
+            let adx = calculateADX(prices);
+            let bollinger = calculateBollingerBands(prices);
+            let cci = calculateCCI(prices);
+            let stoch = calculateStochastic(prices);
+
+            let isLateral = {
+                adx: adx[adx.length - 1] < 20, // Mercado lateral si ADX es bajo
+                bollinger: bollinger.upperBand[prices.length - 1] - bollinger.lowerBand[prices.length - 1] < 0.02, // Mercado lateral si las bandas están estrechas
+                cci: Math.abs(cci[cci.length - 1]) < 100, // Mercado lateral si el CCI está entre -100 y 100
+                stoch: stoch[stoch.length - 1] < 80 && stoch[stoch.length - 1] > 20 // Mercado lateral si el estocástico no está en sobrecompra/sobreventa
+            };
+
+            return isLateral;
+        }
+
+        // Función para mostrar recomendaciones de compra/venta
+        function displayBuySellRecommendations(prices) {
+            let recommendation = "";
+
+            let isUptrend = prices[prices.length - 1] > prices[prices.length - 2];
+            let isDowntrend = prices[prices.length - 1] < prices[prices.length - 2];
+
+            if (isUptrend) {
+                recommendation = "Compra recomendada: Tendencia alcista.";
+            } else if (isDowntrend) {
+                recommendation = "Venta recomendada: Tendencia bajista.";
+            } else {
+                recommendation = "Mercado lateral: No realizar operaciones.";
+            }
+
+            document.getElementById("buySellStatus").innerHTML = recommendation;
+        }
+
+        // Función para mostrar información del análisis de tendencia
+        function displayTrendAnalysis(prices) {
+            let trendStatus = "Tendencia: ";
+            let isUptrend = prices[prices.length - 1] > prices[prices.length - 2];
+            let isDowntrend = prices[prices.length - 1] < prices[prices.length - 2];
+
+            if (isUptrend) {
+                trendStatus += "Alcista";
+            } else if (isDowntrend) {
+                trendStatus += "Bajista";
+            } else {
+                trendStatus += "Neutral";
+            }
+
+            document.getElementById("trendStatus").innerHTML = trendStatus;
+            displayBuySellRecommendations(prices);
+        }
+
+        // Función para mostrar análisis del mercado lateral
+        function displayLateralMarketAnalysis(prices) {
+            let isLateral = isMarketLateral(prices);
+            let lateralStatus = "Mercado : ";
+
+            if (isLateral.adx && isLateral.bollinger && isLateral.cci && isLateral.stoch) {
+                lateralStatus += "Lateral.";
+            } else {
+                lateralStatus += "No Lateral.";
+            }
+
+            document.getElementById("lateralStatus").innerHTML = lateralStatus;
+        }
+
+        // Función para mostrar el análisis de CHOCH
+        function displayCHOCH(prices) {
+            let chochStatus = "CHOCH: ";
+            let choch = calculateCHOCH(prices);
+
+            if (choch[choch.length - 1] === "Alcista") {
+                chochStatus += "Tendencia Alcista";
+            } else if (choch[choch.length - 1] === "Bajista") {
+                chochStatus += "Tendencia Bajista";
+            } else {
+                chochStatus += "Neutral";
+            }
+
+            document.getElementById("chochStatus").innerHTML = chochStatus;
+        }
+
+        // Función para iniciar el análisis cuando se selecciona la moneda
+        async function displayMarketAnalysis() {
+            const symbol = document.getElementById("currencySelector").value;
+            const interval = document.getElementById("intervalSelector").value;
+            const prices = await fetchBinancePrices(symbol, interval);
+
+            if (prices.length > 0) {
+                displayTrendAnalysis(prices);
+                displayLateralMarketAnalysis(prices);
+                displayCHOCH(prices);
+            } else {
+                alert("Error al obtener precios.");
+            }
+        }
+
+        // Función para reiniciar la información en pantalla y detener el análisis automático
+        function resetDisplay() {
+            document.getElementById("trendStatus").innerHTML = "Calculando...";
+            document.getElementById("lateralStatus").innerHTML = "Calculando...";
+            document.getElementById("chochStatus").innerHTML = "Calculando...";
+            document.getElementById("buySellStatus").innerHTML = "Calculando...";
+            document.getElementById("countdown").innerHTML = "31";
+
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+                analysisInterval = null;
+            }
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+
+        // Función para iniciar el análisis automático y la cuenta regresiva
+        function startAutoAnalysis() {
+            displayMarketAnalysis(); // Ejecuta el análisis inmediatamente
+            startCountdown(analysisDelay); // Inicia la cuenta regresiva
+
+            // Iniciar el análisis automático cada 31 segundos
+            analysisInterval = setInterval(() => {
+                displayMarketAnalysis();
+                startCountdown(analysisDelay); // Reiniciar la cuenta regresiva con cada análisis
+            }, analysisDelay * 1000);
+        }
+
+        // Función para iniciar la cuenta regresiva en segundos
+        function startCountdown(seconds) {
+            let timeLeft = seconds;
+            document.getElementById("countdown").innerHTML = `Próximo análisis en: ${timeLeft} s`;
+
+            // Detiene cualquier cuenta regresiva anterior
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById("countdown").innerHTML = `Próximo análisis en: ${timeLeft} s`;
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval); // Detener el temporizador al llegar a 0
+                }
+            }, 1000);
+        }
+
+        // Nueva función para detener el análisis automático
+        function stopAutoAnalysis() {
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+                analysisInterval = null;
+            }
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            document.getElementById("countdown").innerHTML = "Análisis detenido";
+        }
+
+        // Eventos de cambio de moneda
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("currencySelector").addEventListener("change", resetDisplay);
+            document.getElementById("currencySelector").addEventListener("change", startAutoAnalysis);
+        });
+    </script>
+</head>
+<body>
+    <h1>Análisis de Mercado</h1>
+
+    <div class="dos">
+    <select id="currencySelector">
+        <option value="BTCUSDT">Bitcoin (BTC)</option>
+        <option value="ETHUSDT">Ethereum (ETH)</option>
+        <option value="SOLUSDT">Solana (SOL)</option>
+        <option value="BNBUSDT">Binance Coin (BNB)</option>
+        <option value="SUIUSDT">SUI (SUI)</option>
+        <option value="FTMUSDT">FTM (FTM)</option>
+        <option value="MKRUSDT">MKR (MKR)</option>
+    </select>
+
+    
+    <select id="intervalSelector">
+        <option value="1m">1 minuto</option>
+        <option value="5m">5 minutos</option>
+        <option value="15m" selected>15 minutos</option>
+        <option value="1h">1 hora</option>
+        <option value="4h">4 horas</option>
+        <option value="1d">1 día</option>
+    </select>
+    </div>
+    
+    <p id="countdown">Próximo análisis en: -- s</p>
+    <div class="dos">
+    <button onclick="displayMarketAnalysis()">Iniciar Análisis</button>
+    <button onclick="stopAutoAnalysis()">Detener Análisis</button> 
+    </div>
+
+    <h2>Estado del Mercado Alcista/Bajista</h2>
+    <p id="trendStatus">Calculando...</p>
+
+    <h2>Estado del Mercado Lateral</h2>
+    <p id="lateralStatus">Calculando...</p>
+
+    <h2>Estado de CHOCH</h2>
+    <p id="chochStatus">Calculando...</p>
+
+    <h2>Recomendación de Compra/Venta</h2>
+    <p id="buySellStatus">Calculando...</p>
+
+</body>
+</html>
