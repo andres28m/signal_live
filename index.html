@@ -99,7 +99,7 @@
     <script>
         let analysisInterval; // Intervalo de análisis
         let countdownInterval; // Intervalo para el temporizador de cuenta regresiva
-        const analysisDelay = 9; // Tiempo de espera en segundos para el próximo análisis
+        const analysisDelay = 3; // Tiempo de espera en segundos para el próximo análisis
 
         async function fetchBinancePrices(symbol = 'BTCUSDT', interval = '15m', limit = 96) {
             const baseUrl = 'https://api.binance.com/api/v3/klines';
@@ -366,7 +366,7 @@
         // Función para iniciar la cuenta regresiva en segundos
         function startCountdown(seconds) {
             let timeLeft = seconds;
-            document.getElementById("countdown").innerHTML = `Próximo análisis en: ${timeLeft} s`;
+            document.getElementById("countdown").innerHTML = `Análisis en: ${timeLeft} s`;
 
             // Detiene cualquier cuenta regresiva anterior
             if (countdownInterval) {
@@ -375,7 +375,7 @@
 
             countdownInterval = setInterval(() => {
                 timeLeft--;
-                document.getElementById("countdown").innerHTML = `Próximo análisis en: ${timeLeft} s`;
+                document.getElementById("countdown").innerHTML = `Análisis en: ${timeLeft} s`;
 
                 if (timeLeft <= 0) {
                     clearInterval(countdownInterval); // Detener el temporizador al llegar a 0
@@ -428,7 +428,7 @@
     </select>
     </div>
     
-    <!--<p id="countdown">Próximo análisis en: -- s</p>-->
+    <p id="countdown">Próximo análisis en: -- s</p>
     <div class="dos">
     <button onclick="displayMarketAnalysis()">Iniciar Análisis</button>
     <button onclick="stopAutoAnalysis()">Detener Análisis</button> 
